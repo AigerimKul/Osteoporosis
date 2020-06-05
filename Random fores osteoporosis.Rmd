@@ -1,0 +1,411 @@
+---
+title: "Random Forest: Osteoporosis"
+author: "Aigerim Kulzhabayeva"
+date: "24 March 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+###Background.
+
+
+This Markdown will introduce decision tree and Random forest models and Boosting method through an example: Prediction of osteoporosis fracture.
+
+Osteoporosis is a condition that causes bones to become thin and porous, decreasing bone strength and leading to increased risk of breaking a bone. The most common sites of osteoporotic fracture are the wrist, spine and hip. No single cause for osteoporosis has been identified.
+
+dd cosists of 5935 observations and 54 variables. 
+
+The goal is to predict risk of fracture.
+Original question: What are the risk factors for osteoporotic fracture?
+Our output variables are fractures of hip, wrist and spine, so we have 3 output variables.
+
+I will create ordinal variable with levels: 0 - no fracture, 1 - hip fracture, 2 -wrist fracture, 3 - spine fracture.
+
+
+```{r echo=FALSE}
+
+#Loading the packages and dd
+
+#install.packages("sas7bdat")
+#install.packages("tidyverse")
+#install.packages("VIM")
+#install.packages("infotheo")
+#install.packages("mice")
+#install.packages("randomForest")
+
+library(sas7bdat)
+library(infotheo)
+library(VIM)
+library(spida2)
+library(tidyverse)
+library(infotheo)
+library(mice)
+library(randomForest)
+
+
+
+data<-read.sas7bdat("C:/Users/ivanopolo/Desktop/Masters courses/frax_risk (2).sas7bdat")
+
+```
+
+
+###Exploratory analysis.
+
+Lets look at the ddset and create the output variable fracture
+
+##rename variables with BMD SO THAT THEY INVOLVE THE ACRONYM.
+```{r}
+#rename the variables 
+
+data<-plyr::rename(data,replace=c("SEQN" = "id","RIAGENDR"= "gender", "RIDAGEYR"="age", "RIDRETH1"="race", "SDMVPSU"="masked.var",  "SDMVSTRA"="masked.strat","OSQ010A"= "broken.hip",  "OSQ010B"= "broken.wrist","OSQ010C"="broken.spine", "OSQ020A" = "num.broken.hip",  "OSQ020B" = "num.broken.wrist","OSQ020C" = "num.broken.spine",
+  "OSQ040AA" = "age.first.hip", "OSQ040BA"="age.first.wrist", "OSQ040CA"="age.first.spine", "OSQ070"="test.ostep",  "OSQ130" = "steroid",  "OSQ170"= "mother.hip", "OSQ200"="father.hip",  "DXXOFBMD" = "femur.tot","DXXNKBMD"= "femur.neck", "DXXTRBMD"= "trochanter", "DXXINBMD"="intertrochanter", "DXXWDBMD"= "wards", "DXXOSBMD" = "spine.BMD", "ALQ101"= "12alc", "ALQ130"= "av.alc","ALQ140Q"= "5drinks.days", "DIQ010" ="diab","DID040"="age.diab",   "DIQ220" = "time.diab", "MCQ160A" = "arth",  "MCQ180A"= "age.arth","MCQ190"= "type.arth",   "MCQ160C"= "heart",  "MCQ180C"="age.heart", "MCQ160L"="liver", "MCQ170L" = "still.liver", "MCQ180L"= "age.liver",  "BMXBMI"= "BMI", "DBQ197" = "30day.milk","DBQ229"= "reg.milk.use",    "WHD020"= "weight.self",   "WHD110"= "weight10.self" ))
+
+#summary(dd)
+
+data$fracture<-0
+data$fracture<-ordered(data$fracture, levels = c("0","1","2","3"))
+data$fracture[data$broken.hip]<-1
+data$fracture[data$broken.wrist]<-2
+data$fracture[data$broken.spine]<-3
+
+```
+
+
+```{r}
+
+xqplot(data)  #Spida2 package
+
+```
+
+From the xq plot we see several things:
+
+1. All variables are of class numeric, this will need to be change to the appropriate class.
+2. There are variables called masked variance and stratified variance which looks longitudinal. I will look into the reasoning behind this variable.
+3. Because numeric variables have missing values as 9999 its nearly imposible to see into the distribution of actual values.
+4. There is an id variable that is unique for all samples and provides no information. We will remove that variable.
+
+
+
+
+```{r}
+
+#we will explore using data and work on dd
+
+dd<-data
+
+dd$id<-NULL
+
+dd[dd=="NaN"]<-NA
+
+#Factors
+
+dd[ ,c("gender", "race","masked.var","broken.hip","broken.wrist","broken.spine","age.first.hip","age.first.wrist","age.first.spine","test.ostep","steroid","OSQ140U","mother.hip","father.hip","SMQ020","SMQ040","12alc","diab","arth","type.arth","heart","liver",
+       "still.liver")]<-lapply(dd[ ,c("gender", "race","masked.var","broken.hip","broken.wrist","broken.spine","age.first.hip","age.first.wrist","age.first.spine","test.ostep","steroid","OSQ140U","mother.hip","father.hip","SMQ020","SMQ040","12alc","diab","arth","type.arth","heart","liver","still.liver")], as.factor)
+
+
+#Ordinal variables
+
+dd[,c("num.broken.hip","num.broken.wrist","num.broken.spine","time.diab","12alc","30day.milk","reg.milk.use")]<-lapply(dd[,c("num.broken.hip","num.broken.wrist","num.broken.spine","time.diab","12alc","30day.milk","reg.milk.use")],as.ordered)
+
+
+xqplot(dd)
+
+
+```
+
+I will remove the id variable since it is unique to each individual and carries no information.
+
+
+
+####Dealing with missing values
+
+From the xq plot we see that there are quite a few missing values. Lets at the variables that have more than.
+
+From the overview of the data set we can see that all numbers that are missing in both categorical and continuous variables are NaN. If this was just for categorical variables we could have treated these values as a separate category value of which is absent by survey design but since its both categorical and continuous we will treat all NaN values as missing and fill them in one by one.
+
+
+```{r}
+
+#We will use data to see the missing categorical since NaN in categorical doesnt show.
+
+ddm<-dd[which(colSums(is.na(dd)) >0)]
+dim(ddm)
+aggr(ddm, oma = c(8,2,0,0)) 
+
+```
+
+
+There are 34 variables that have missing values,lets first focus on the ones that have more than 90% missing values.
+
+```{r}
+
+ddm.90<-dd[which(colSums(is.na(dd)) >5300)] #picking a differernt threshhold
+
+dim(ddm.90)
+aggr(ddm.90, oma = c(8,2,0,0)) 
+
+#glimpse(ddm.3400)
+
+```
+
+Since this is a survey, it seems that NaN values in some of the variables such as num.broken.hip are dependent on whether the person had a hip broken. To confirm this we will look at the pattern of missingness in the variables in ddm.3400 and compare them using mutual information to variables it can potentially be conditional on. 
+This kind of missing mechanis is called Missing at Random, since the missingness relies on observed values of another variable.
+
+
+Also if we are looking at different variables that should be included in the model, if we include age variable and the output fracture then information given is redundant.
+Risk of fracture does not depend on the age when the fracture occured but on age in general
+```{r}
+
+mutual.info<-round(mutinformation(dd), digits=3)
+mutual.info
+
+
+```
+
+From mutual information we see that following variables have very high mutual information:
+
+1. broken.hip, num.broken.hip
+2. broken.wrist, num.broken.wrist 
+3. broken.spine, num.broken.spine
+
+
+We will add level zero "0" in the number and age of fractures based on whether fracture has occured.
+
+
+
+```{r}
+
+levels(dd$num.broken.hip) #Adding level to a factor
+dd$num.broken.hip<-factor(dd$num.broken.hip, levels= c(levels(dd$num.broken.hip),"0"))
+dd$num.broken.hip[dd$broken.hip==2]<- 0
+
+
+dd$num.broken.wrist<-factor(dd$num.broken.wrist,levels= c(levels(dd$num.broken.wrist),"0"))
+dd$num.broken.wrist[dd$broken.wrist==2]<-0
+
+dd$num.broken.spine<-factor(dd$num.broken.spine,levels= c(levels(dd$num.broken.spine),"0"))
+dd$num.broken.spine[dd$broken.spine==2]<-0
+
+ddm.90<-dd[which(colSums(is.na(dd)) >5300)]
+aggr(ddm.90, oma = c(8,2,0,0)) 
+
+```
+
+
+We see that those variables are no longer an issue.However there are other variables that are conditional on values of observed variables and they are:
+
+1. diab, age.diab, time.diab
+2. arth, age.arth, type.arth
+3. heart, age.heart
+4. liver, still.liver, age.liver
+5. age.first.hip       (broken.hip)
+6. age.first.wrist    (broken.wrist)
+7. age.first.spine   (broken.spine)
+
+we could potentially descretize these values and create a category "not applicable" for those who do not have the disesase. For now I would like just to see whether simply having one of those condition will affect the model so I will put the variables that detail the disease aside. 
+
+(Add later)
+
+
+
+
+```{r}
+
+dd<-within(dd,rm("age.diab","time.diab","age.arth","type.arth","age.heart",
+                      "still.liver","age.liver","age.first.hip","age.first.wrist",
+                      "age.first.spine" ))
+
+ddm.90<-dd[which(colSums(is.na(dd)) >5300)]
+aggr(ddm.90, oma = c(8,2,0,0)) 
+
+
+#test.ostep.missing<-sum(dd.core$test.ostep=="NaN")/length(dd.core$test.ostep)
+#test.ostep.missing
+
+#OSQ140Q.missing<-sum(dd.core$OSQ140Q=="NaN")/length(dd.core$OSQ140Q)
+#OSQ140Q.missing
+
+#OSQ140U.missing<-sum(dd.core$OSQ140U=="NaN")/length(dd.core$OSQ140U)
+#OSQ140U.missing
+
+#SMQ040.missing<-sum(dd.core$SMQ040=="NaN")/length(dd.core$SMQ040)
+#SMQ040.missing
+
+#alc12.missing<-sum(dd.core$`12alc`=="NaN")/length(dd.core$`12alc`)
+#alc12.missing
+
+```
+
+
+
+
+
+Looking at the graph we see that variable test.ostep has over 93% of dd is NaN and it doesn't seem like we can get much information as to why form another variable.Also since the most common tests for osteoporosis includes Bone Density Mass and we have those variables available it is safe to remove this variable form the analysis.
+
+Another troubling variable is OSQ140Q OSQ140U, thESE variables has over 95% of missing values and there is no description as to what this variable means. We will remove these variables.
+
+
+
+```{r}
+
+#levels(dd.core$SMQ040)[levels(dd.core$SMQ040)=="NaN"]<-"Nt"
+dd<-within(dd,rm("OSQ140Q","OSQ140U","test.ostep"))
+
+```
+Now lets get a smaller threshhold for missing values and look at the variables that have more than 20% of missing values.
+
+```{r}
+
+ddm.20<-dd[which(colSums(is.na(dd)) >100)]
+aggr(ddm.20, oma = c(8,1,0,0)) #oma: vector of the form c(bot,left,top,right) giving the size of the outer margins in lines of text
+
+
+```
+
+From the above plot we see that there are several patterns of missingness.
+There are groups of variable on the same subject that are missing.
+
+1. Group 1: Smoking habit variable
+2. Group 2: Bone mass density (BMD) variables 
+3. Group 3: Alcohol consumption variables
+4. Group 4: Weight related variables
+
+
+1. From online search I have identified that variale SMQ020 and SMQ040 pertains to smaking habits. 
+SMQ020 - do you smoke? 1-yes, 2-no
+SMQ040 - how often? 1- daily, 2-sometimes, 3-not at all
+
+when looking at the plot it seems that people who responded that they do not smoke did not indicate anything in SMQ040 variable. This means that we can put in the value of 3 in SMQ040 whenever SMQ020 is 2.
+
+
+```{r}
+
+dd$SMQ040[dd$SMQ020==2]<-3
+ddm.20<-dd[which(colSums(is.na(dd)) >100)]
+aggr(ddm.20, oma = c(8,2,0,0)) #oma: vector of the form c(bot,left,top,right) giving the size of the outer margins in lines of text
+
+
+```
+
+2. Now lets focus on the BMD variables. The most interesting pattern involves measurements of BMD on femur, femur.neck, trochanter, intertrochanter and ward's triangle which are all located in pelvis. It seems that these measurements were done only when certain criteria was satisfied.
+
+To check whether missingness depends on any variables in the data set we will create a categorical variable with missing pattern of the above variables and see if any other variable like age is used to decide necessity to measure. We will try doing this using logistic regression.
+
+After testing several models, below is the best one. Based on results seem that the variables BMI and alcohol consumption determine whether person is tested for hip BMD variables
+
+
+
+
+```{r}
+
+bmd<-rep(0,times=length(dd$femur.tot))
+
+dd.bmd<-as.data.frame(bmd)
+dd.bmd$bmd[is.na(dd$femur.tot)]<-1
+dd.bmd$bmd<-factor(dd.bmd$bmd)
+dd.bmd$age<-dd$age
+
+dd.bmd$steroid<-dd$steroid
+dd.bmd$mother.hip<-dd$mother.hip
+dd.bmd$father.hip<-dd$father.hip
+dd.bmd$SMQ<-dd$SMQ020
+dd.bmd$alc<-dd$`12alc`
+dd.bmd$diab<-dd$diab
+dd.bmd$arth<-dd$arth
+dd.bmd$heart<-dd$heart
+dd.bmd$liver<-dd$liver
+dd.bmd$bmi<-dd$BMI
+
+model1<-glm(bmd ~ bmi+alc, family=binomial(logit), data=dd.bmd)
+summary(model1)
+anova(model1)
+
+alc<-rep(c(1,2),length(seq(14:60))/2)
+length(alc)
+alc<-as.factor(alc)
+
+dd.pred<-data.frame(bmi=seq(14:59),alc = alc) 
+dd.pred
+
+p<-predict(model1, newdata = dd.pred  , type = "response")
+dd.pred$pred<-p
+
+levels(dd.pred$alc)<- c("Yes","No")
+
+xyplot(p ~ bmi,groups = alc ,dd.pred, ylab = "Probability of mi", auto.key =list(columns =2, title= "Alcohol consumption" ))
+       
+
+#is the coefficient significant?
+
+
+
+```
+
+
+```{r}
+
+
+
+```
+
+
+Measurement of L1 - L4 are measurements of BMD associate with L1- L4 vertibrae.
+spine BMD? is it total or avetage BMD? how they measure.
+
+
+
+
+
+
+
+
+
+From above I would like to focus on alcohol consumption variable. This variable is highly unreliable because involves sensitive information. We will rely more on other variables. However we could fill in some NaN values.
+We have 3 variables
+average day consumption 0 if alc12 is 2
+num days more than 5 drinks 0 if alc12 is 2
+
+
+
+
+
+
+
+
+
+```{r include = FALSE}
+
+#dd.core$av.alc[dd.core$`12alc`==2]<-0
+#dd.core$`5drinks.days`[dd.core$`12alc`==2]<-0
+
+#ddm.100<-dd.core[which(colSums(dd.core=="NaN" | dd.core=="NA") >100)]
+#aggr(ddm.100, oma = c(8,2,0,0))
+#To do next:
+
+#1.BMI and weight self past 10 years, look for correlation and maybe we can impute
+
+#2. Who did not want to answer questions about alcohol consumption?
+
+#3. Put a model on all the bone stuff and then impute. Why did these people not get tested?
+
+#4. for the variables: femur.tot, femur.neck,trochanter, intertrochanter and wards we see the pattern of missingness which is calles Little and Ruben, multivariate two pattern. In this case since the missing values are on the same individuals it seems reasonable to say that there is some criteria which needs to satisfied to get bone density testing on these particular bones. I will check the pattern of missingness angainst some of the variables as (age, whether bone was broken) using logistic regression to see whether this is true
+
+#5. One thing to keep in mind is the order in which variables were aquired. For example there could be strong relationship between fracture and test for BMD but if the test was conducted after the fracture happened then we can not use it to predict fracture. But if test is done before the fracture appears, based on some criteria like age then we can use that info to predict the chance of fracture in that individual based on the test.
+
+
+
+
+
+```
+
+
+
+```{r}
+
+
+
+
+
+```

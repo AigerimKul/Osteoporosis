@@ -21,8 +21,6 @@ Summaryof the analysis
 1. Features: Unbalanced outcome variable, missing values (30% of the data set)
 
 
-
-
 ```{r echo=FALSE}
 
 #Loading the packages and dd
@@ -44,8 +42,6 @@ library(infotheo)
 library(mice)
 library(randomForest)
 library(spida2)
-
-
 
 data<-read.sas7bdat("C:/Users/ivanopolo/Desktop/Masters courses/frax_risk (2).sas7bdat")
 
@@ -75,7 +71,6 @@ Lets first take a look at our data set graphically. We will pay attention to the
 
 ```{r}
 xqplot(data)  #Spida2 package
-
 ```
 
 From the xqplot we see several things:
@@ -151,6 +146,7 @@ Possible questions: does number of fractures you already had increase your risk 
 
 
 ```{r}
+
 # Creating the outcome variable
 
 dd$fracture<-0
@@ -158,16 +154,14 @@ dd$fracture[dd$broken.hip==1]<-1
 dd$fracture[dd$broken.wrist==1]<-1
 dd$fracture[dd$broken.spine==1]<-1
 
-dd<-select(dd,-c("broken.hip","broken.wrist","broken.spine","num.broken.hip","num.broken.wrist","num.broken.spine"))
+dd<-select(dd,-c("broken.hip","broken.wrist","broken.spine","num.broken.hip","num.broken.wrist","num.broken.spine")) #Removing other possible outcome varaibles
 
 c<-table(dd$fracture) %>% as.data.frame()
 
 barplot(table(dd$fracture)/5935, xlab= "Fracture", ylab = "Proportion",  horiz=FALSE, width = 0.2, xlim = (0:1), col = "#69b3a2", ylim = (0:1), names.arg = c("Yes", "No"), main = ("Proportion of Fractures in the Sample"))
 
 
-
 ```
-
 
 
 We see that the outcome variable is quite unbalanced. Now that we have identified the outcome variable and formulated the question lets move on to data cleaning. We will start with adressing the missing values. 
@@ -182,7 +176,7 @@ missing
 
 ```
 
-From the whole data set we have almost 30% data missing.
+From the whole data set we have about 30% of data missing.
 
 ```{r}
 ddm<-dd[which(colSums(is.na(dd)) >0)]
@@ -196,7 +190,7 @@ There are 31 variables that have missing values, which is more than half of the 
 
 ### 2.4.1 Keeping track of original and imputed variables.
 
-At this stage I will start keeping track of variables that we have filled in the missing values for vs the ones that had original information so when we will come to modelling we can add them to the model acordingly. We will put more faith in the data provided and less faith in the data imputed. data set dd.full will contain variables that originally had no missing values and we will be adding variables where we can fill in missing values confidently because they were missing by design. For example for the variable of number of cigarettes skoked per day we can write zero if smoke variable indicated that this person doesn't smoke.
+At this stage I will start keeping track of variables that we have filled in the missing values for vs. the ones that had original information so when we will come to modelling we can add them to the model acordingly. We will put more faith in the data provided originally and less faith in the data imputed. data set dd.full will contain variables that originally had no missing values and we will be adding variables where we can fill in missing values confidently because they were missing by design. For example: for the variable of number of cigarettes smoked per day we can write zero if person doesn't smoke insted of NA - "Not applicable".
 
 ```{r}
 
@@ -208,43 +202,26 @@ dim(dd.full)
 
 ### 2.4.2 Variable that have more than 90% missing values.
 
-Lets further narrow down by focusing on the ones that have more than 90% missing values.
+Because we have quite a few variables that have missing data lets look at them in stages by focusing first on the ones that have more than 90% missing values.
 
 ```{r}
 
-ddm.90<-dd[which(colSums(is.na(dd)) >5935*0.9)] #picking a different threshhold
-
+ddm.90<-dd[which(colSums(is.na(dd)) >5935*0.9)] 
 dim(ddm.90)
-aggr(ddm.90, oma = c(10,1,0,0)) 
+aggr(ddm.90, oma = c(8,1,0,0)) 
 
 ```
 
-So we went down to 10 variables, which is a bit more managable.
+So we went down to 10 variables, which is a bit more managable. Lets look at the plot of missing values again.
 
-
-Lets look at the plot of missing values again.
-
-```{r}
-ddm.90<-dd[which(colSums(is.na(dd)) >5935*0.9)]
-aggr(ddm.90, oma = c(8,2,0,0)) 
-
-```
-
-
-We see that those variables are no longer an issue and have no missing values, and we will add them to our dd.fuul dataset since these values weren't really missing.
-
-```{r}
-dd.full$
-
-```
-
-Next lets move on to the variables that (age.first.hip, age.first.wrist, age.first.diab). These variables probably have values missing for the same reason as in previous three, however it is a bit trickier to see what value should we put for age when there has been no fracture.
+Lets look at the variables that (age.first.hip, age.first.wrist, age.first.diab). I noticed that these variables have NAN when fracture in fact hasn't happened. This kind of missing mechanis is called missing by design, since the missingness relies on answer in another variable. However it is a bit tricky to see what value should we put for age when there has been no fracture.
 
 These variables could help us see whether age has anything to do with probability of fracture as it tells us at what age fracture occured.
 One solution could be creating a variable "Relevant age" which will have current age for people who did't have the fracture and age of fracture which had occured.
 
-Same can be done for the variables age.diab, age.liver, age.heart, however this means that we are introducing a lot of correlation in our variableas and should be aware of it. 
+Same can be done for the variables age.diab, age.liver, age.heart, however this means that we are introducing a lot of correlation in our variables and should be aware of it. 
 
+We will put these variables in the dd.imputed data set. We will be suing these variables in model building but take note that these varaibles are not as reliable and will try to avoid including them in the model if the model performance is not improved drastically.
 
 ```{r}
 
@@ -546,7 +523,7 @@ num days more than 5 drinks 0 if alc12 is 2
 
 By looking at the first three variables (num.broken.hip, num.broken.spine, num.broken.wrist) I notice that these variables have NAN when fracture in fact hasn't happened. I will assign value of 0 to (num.broken.hip, num.broken.spine, num.broken.wrist) when (broken.hip, broken.spine,broken.wrist) is 2, meaning no fracture happened
 
-
+I notice that these variables have NAN when fracture in fact hasn't happened. 
 This kind of missing mechanis is called Missing at Random (MAR), since the missingness relies on observed values of another variable.
 
 

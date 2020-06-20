@@ -214,68 +214,65 @@ aggr(ddm.90, oma = c(8,1,0,0))
 
 So we went down to 10 variables, which is a bit more managable. Lets look at the plot of missing values again.
 
-Lets look at the variables that (age.first.hip, age.first.wrist, age.first.diab). I noticed that these variables have NAN when fracture in fact hasn't happened. This kind of missing mechanis is called missing by design, since the missingness relies on answer in another variable. However it is a bit tricky to see what value should we put for age when there has been no fracture.
+Lets look at the variables that (age.first.hip, age.first.wrist, age.first.diab). I noticed that these variables are factors with value of 1 when fracture occured after age of 50 and have NAN when fracture in fact hasn't happened. This kind of missing mechanism is called missing by design, since the missingness relies on answer in another variable. In this variable we willjust add a third category for poeple who did't have fracture.
 
-These variables could help us see whether age has anything to do with probability of fracture as it tells us at what age fracture occured.
-One solution could be creating a variable "Relevant age" which will have current age for people who did't have the fracture and age of fracture which had occured.
 
-Same can be done for the variables age.diab, age.liver, age.heart, however this means that we are introducing a lot of correlation in our variables and should be aware of it. 
-
-We will put these variables in the dd.imputed data set. We will be suing these variables in model building but take note that these varaibles are not as reliable and will try to avoid including them in the model if the model performance is not improved drastically.
+Since we will be applying random forest model to the data, one idea is that if we have variables like age.first.hip, which is a binary variable indicating whether first time when fracture of hip happened (<50, >50).
+If we introduce another category into this variable - NA, which will indicate that there was no fracture, then this variable gives exact same information as the variable break.hip, which inicated whether hip was broken but is more granular on the "yes" category.
 
 ```{r}
 
-# do the 
-#age.first.hip, age.first.spine,age.first.wrist, age.heart, age.diab, age.liver, age.arth
+levels(dd$age.first.hip) #Adding level to a factor
+dd$age.first.hip<-factor(dd$age.first.hip, levels= c(levels(dd$age.first.hip),"0"))
+dd$age.first.hip[data$broken.hip==2]<-0
 
+dd$age.first.wrist<-factor(dd$age.first.wrist,levels= c(levels(dd$age.first.wrist),"0"))
+dd$age.first.wrist[data$broken.wrist==2]<-0
 
-# put aside time.diab, type.arth, still.liver.
+dd$age.first.spine<-factor(dd$age.first.spine,levels= c(levels(dd$age.first.spine),"0"))
+dd$age.first.spine[data$broken.spine==2]<-0
+
+dd.full$age.first.hip<-dd$age.first.hip
+dd.full$age.first.wrist<-dd$age.first.wrist
+dd.full$age.first.spine<-dd$age.first.spine
+```
+
+We will add these variables to the full data, because the information was not missing but misrepresented.
+
+```{r}
+ddm.90<-dd[which(colSums(is.na(dd)) >5935*0.9)] 
+dim(ddm.90)
+aggr(ddm.90, oma = c(8,1,0,0)) 
 
 ```
 
+# Age.diab, age.liver (can we merge the with age variable?) 
 
-
-However there are other variables that are conditional on values of observed variables and they are:
+Other variables that are conditional on values of observed variables:
 
 1. age.diab, time.diab (diab)
 2. age.arth, type.arth (arth)
 3. age.heart          (heart)
 4. age.liver, still.liver(liver)
-5. age.first.hip       (broken.hip)
-6. age.first.wrist    (broken.wrist)
-7. age.first.spine   (broken.spine)
+
 
 we could potentially descretize these values and create a category "not applicable" for those who do not have the disesase. For now I would like just to see whether simply having one of those condition will affect the model so I will put the variables that detail the disease aside. 
 
-(Add later)
-
-
-
+We will put these variables in the dd.imputed data set. We will try these variables in model building but take note that these varaibles are not as reliable and will try to avoid including them in the model if the model performance is not improved drastically.
 
 ```{r}
 
-dd<-within(dd,rm("age.diab","time.diab","age.arth","type.arth","age.heart",
-                      "still.liver","age.liver","age.first.hip","age.first.wrist",
-                      "age.first.spine" ))
+dd.imputed<-select(dd, c("age.diab", "age.liver", "age.heart", "time.diab", "type.arth","still.liver"))
+
+```
+
+
+```{r}
+dd<-select(dd,-c(names(dd.imputed)))
+dd<-select(dd,-c(names(dd.full)))
 
 ddm.90<-dd[which(colSums(is.na(dd)) >5935*0.9)]
 aggr(ddm.90, oma = c(8,2,0,0)) 
-
-
-#test.ostep.missing<-sum(dd.core$test.ostep=="NaN")/length(dd.core$test.ostep)
-#test.ostep.missing
-
-#OSQ140Q.missing<-sum(dd.core$OSQ140Q=="NaN")/length(dd.core$OSQ140Q)
-#OSQ140Q.missing
-
-#OSQ140U.missing<-sum(dd.core$OSQ140U=="NaN")/length(dd.core$OSQ140U)
-#OSQ140U.missing
-
-#SMQ040.missing<-sum(dd.core$SMQ040=="NaN")/length(dd.core$SMQ040)
-#SMQ040.missing
-
-#alc12.missing<-sum(dd.core$`12alc`=="NaN")/length(dd.core$`12alc`)
-#alc12.missing
 
 ```
 
@@ -542,6 +539,9 @@ dd$num.broken.spine[dd$broken.spine==2]<-0
 
 ```
 
+
+These variables could help us see whether age has anything to do with probability of fracture as it tells us at what age fracture occured.
+One solution could be creating a variable "Relevant age" which will have current age for people who did't have the fracture and age of fracture which had occured.
 
 ```{r}
 

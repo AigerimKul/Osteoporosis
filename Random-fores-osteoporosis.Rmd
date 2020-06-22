@@ -430,7 +430,6 @@ library(missForest)
 system.time(dd.forest<-missForest(dd.full)) 
 dd.forest.full<-dd.forest$ximp
 
-dd.forest.full$fracture<-as.factor(dd.forest.full$fracture) 
 
 ```
 
@@ -450,66 +449,24 @@ dd.train<-dd.forest.full[train,]
 dd.test<-dd.forest.full[-train,]
 
 
-xqplot(dd.train)
-
+summary(dd.train)
 ```
 
 
 ```{r}
 
-xqplot(dd.test)
-
-```
-
-
-First we will run model with default parameters and then we can fine-tune these parameters later. Two basin parameters are mtry - number of variables randomly sampled at each step (sqrt(p) for classification, (p/3) for regression), and ntree - number of individual trees grown.
-
-
-```{r}
-
-dd.train$milk30.day<-dd.train$`30day.milk`
-dd.train$`30day.milk`<-NULL
-
-dd.test$milk30.day<-dd.test$`30day.milk`
-dd.test$`30day.milk`<-NULL
-
-
-system.time(model1<-randomForest(fracture ~ ., data = dd.train, importance = TRUE, ntree =500, mtry = 5))
-
-model1
-
-test.pred<-predict(model1,dd.test)
-train.pred<-predict(model1,dd.train)
-table(train.pred, dd.train$fracture)
-table(test.pred, dd.test$fracture)
-acc<-mean(test.pred==dd.test$fracture)
-acc
-
-```
-
-
-Surprisingly the accuracy of the model is 99.9% which quite unsettling.
-Usually with unbalanced data this can happen if you just classify everything 
-
-lets look at the variables are giving us such good prediction for the model.
-
-```{r}
-
-model1$importance %>% round()
-
+summary(dd.test)
 
 ```
 
 
 
-It seems that the categorical variable with when fracture occured gives a very good prediction power, however if we want to predict fracture based on age we have to have the variable with ages when fracture occured vs regular ages. Otherwise this categorical variable basically contains the same info as the fracture variable. We will dichotomize the variable age into  <50 and >50 and merge it with these variables.
-
-```{r}
 
 
 
 
-```
+
+
 
 
 

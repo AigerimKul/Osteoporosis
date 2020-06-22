@@ -430,6 +430,10 @@ library(missForest)
 system.time(dd.forest<-missForest(dd.full)) 
 dd.forest.full<-dd.forest$ximp
 
+dd.forest.full$milk30.day<-dd.forest.full$`30day.milk`
+dd.forest.full$`30day.milk`<-NULL
+
+
 dd.forest.full$fracture<-as.factor(dd.forest.full$fracture) 
 
 ```
@@ -467,13 +471,6 @@ First we will run model with default parameters and then we can fine-tune these 
 
 ```{r}
 
-dd.train$milk30.day<-dd.train$`30day.milk`
-dd.train$`30day.milk`<-NULL
-
-dd.test$milk30.day<-dd.test$`30day.milk`
-dd.test$`30day.milk`<-NULL
-
-
 system.time(model1<-randomForest(fracture ~ ., data = dd.train, importance = TRUE, ntree =500, mtry = 5))
 
 model1
@@ -506,153 +503,75 @@ It seems that the categorical variable with when fracture occured gives a very g
 
 ```{r}
 
+dd.forest.full$age.first.hip[dd.forest.full$age<50]<-1
+dd.forest.full$age.first.hip[dd.forest.full$age>=50]<-2
 
+dd.forest.full$age.first.wrist[dd.forest.full$age<50]<-1
+dd.forest.full$age.first.wrist[dd.forest.full$age>=50]<-2
 
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-I would like to explore potentail variables that are associated with the presence or absence of measurement.
-
-```{r}
-
-bmd<-rep(0,times=length(dd$femur.tot))
-
-dd.bmd<-as.data.frame(bmd)
-dd.bmd$bmd[is.na(dd$femur.tot)]<-1
-dd.bmd$bmd<-factor(dd.bmd$bmd)
-xqplot(dd.bmd)
-
-ddm.20<-dd[which(colSums(is.na(dd)) >5935*0.2)]
-
-
-
-aggr(ddm.20,oma = c(8,2,0,0))
-names(ddm.20)
-
-dd.check<-select(dd,-c("femur.tot","femur.neck","trochanter", "intertrochanter", "wards", "spine.BMD", "DXXL1BMD" , "DXXL2BMD","DXXL3BMD", "DXXL4BMD", "av.alc", "5drinks.days", "weight10.self"))
-                 
-dd.check$bmd<-dd.bmd
-dim(dd.check)               
-                 
-dd.check<-na.omit(dd.check)
-summary(dd.check)
-class(dd.check)
-
-for (i in 1:ncol(dd.check)){
-  y<-(dd.check[,i] =="NaN") %>% sum()
-  y}
-
+dd.forest.full$age.first.wrist[dd.forest.full$age<50]<-1
+dd.forest.full$age.first.wrist[dd.forest.full$age>=50]<-2
 
 
 ```
 
+These variable will help us see if age less than 50 or age more than 50 can help us predict the risk of osteoporosis. Lets update the training and testing sets.
+
+
 ```{r}
-ddm.20<-dd[which(colSums(is.na(dd)) >5935*0.2)]
-dim(ddm.20)
-aggr(ddm.20)
 
-#I want to try to model with thses 13 variables which we have no missing values for.
+set.seed(100)
+train <- sample(nrow(dd.forest.full), 0.7*nrow(dd.forest.full), replace = FALSE)
 
+dd.train<-dd.forest.full[train,]
+dd.test<-dd.forest.full[-train,]
+
+system.time(model2<-randomForest(fracture ~ ., data = dd.train, importance = TRUE, ntree =500, mtry = 5))
+
+model2
 
 ```
 
-To check whether missingness depends on any variables in the data set we will create a categorical variable with missing pattern of the above variables and see if any other variable like age is used to decide necessity to measure. We will try doing this using logistic regression.
-
-
-After testing several models, below is the best one. Based on results seem that the variables BMI and alcohol consumption determine whether person is tested for hip BMD variables
-
-
-
+Lets look at the confusion matrix and accuracy.
 
 ```{r}
 
-bmd<-rep(0,times=length(dd$femur.tot))
+test.pred<-predict(model2,dd.test)
+train.pred<-predict(model2,dd.train)
 
-dd.bmd<-as.data.frame(bmd)
-dd.bmd$bmd[is.na(dd$femur.tot)]<-1
-dd.bmd$bmd<-factor(dd.bmd$bmd)
-dd.bmd$age<-dd$age
-
-dd.bmd$steroid<-dd$steroid
-dd.bmd$mother.hip<-dd$mother.hip
-dd.bmd$father.hip<-dd$father.hip
-dd.bmd$SMQ<-dd$SMQ020
-dd.bmd$alc<-dd$`12alc`
-dd.bmd$diab<-dd$diab
-dd.bmd$arth<-dd$arth
-dd.bmd$heart<-dd$heart
-dd.bmd$liver<-dd$liver
-dd.bmd$bmi<-dd$BMI
-
-model1<-glm(bmd ~ bmi+alc, family=binomial(logit), data=dd.bmd)
-summary(model1)
-anova(model1)
-
-alc<-rep(c(1,2),length(seq(14:60))/2)
-length(alc)
-alc<-as.factor(alc)
-
-dd.pred<-data.frame(bmi=seq(14:59),alc = alc) 
-dd.pred
-
-p<-predict(model1, newdata = dd.pred  , type = "response")
-dd.pred$pred<-p
-
-levels(dd.pred$alc)<- c("Yes","No")
-
-xyplot(p ~ bmi,groups = alc ,dd.pred, ylab = "Probability of mi", auto.key =list(columns =2, title= "Alcohol consumption" ))
-       
-
-#is the coefficient significant?
-
-
+table(train.pred, dd.train$fracture)
 
 ```
 
 
 ```{r}
 
-
+table(test.pred, dd.test$fracture)
 
 ```
+
+```{r}
+
+acc<-mean(test.pred==dd.test$fracture)
+acc
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 Measurement of L1 - L4 are measurements of BMD associate with L1- L4 vertibrae.
 spine BMD? is it total or avetage BMD? how they measure.
-
-
-
-### Modelling 
-
-
-
 
 
 ```{r include = FALSE}
@@ -707,10 +626,3 @@ dd$num.broken.spine[dd$broken.spine==2]<-0
 These variables could help us see whether age has anything to do with probability of fracture as it tells us at what age fracture occured.
 One solution could be creating a variable "Relevant age" which will have current age for people who did't have the fracture and age of fracture which had occured.
 
-```{r}
-
-
-
-
-
-```

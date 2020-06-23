@@ -475,6 +475,11 @@ system.time(model1<-randomForest(fracture ~ ., data = dd.train, importance = TRU
 
 model1
 
+```
+
+
+```{r}
+
 test.pred<-predict(model1,dd.test)
 train.pred<-predict(model1,dd.train)
 table(train.pred, dd.train$fracture)
@@ -484,6 +489,9 @@ acc
 
 ```
 
+Bagging is a general-purpose procedure for reducing the variance of a statistical learning method. Random forest uses bagging to estimate error of the trained model by randomly selecting training sets (using bootstrap method) (varaibles and observations?) and build separate models on each. Average the result, or mode in classification and get the resulting model.
+
+OOB - out of bag error.Test error of a bagged model.
 
 Surprisingly the accuracy of the model is 99.9% which quite unsettling.
 Usually with unbalanced data this can happen if you just classify everything 
@@ -494,9 +502,7 @@ lets look at the variables are giving us such good prediction for the model.
 
 model1$importance %>% round()
 
-
 ```
-
 
 
 It seems that the categorical variable with when fracture occured gives a very good prediction power, however if we want to predict fracture based on age we have to have the variable with ages when fracture occured vs regular ages. Otherwise this categorical variable basically contains the same info as the fracture variable. We will dichotomize the variable age into  <50 and >50 and merge it with these variables.
@@ -509,8 +515,8 @@ dd.forest.full$age.first.hip[dd.forest.full$age>=50]<-2
 dd.forest.full$age.first.wrist[dd.forest.full$age<50]<-1
 dd.forest.full$age.first.wrist[dd.forest.full$age>=50]<-2
 
-dd.forest.full$age.first.wrist[dd.forest.full$age<50]<-1
-dd.forest.full$age.first.wrist[dd.forest.full$age>=50]<-2
+dd.forest.full$age.first.spine[dd.forest.full$age<50]<-1
+dd.forest.full$age.first.spine[dd.forest.full$age>=50]<-2
 
 
 ```
@@ -529,16 +535,17 @@ dd.test<-dd.forest.full[-train,]
 system.time(model2<-randomForest(fracture ~ ., data = dd.train, importance = TRUE, ntree =500, mtry = 5))
 
 model2
+#varImpPlot(model2, )
 
 ```
 
 Lets look at the confusion matrix and accuracy.
+OOB = 4501/4154 = 12.06
 
 ```{r}
 
 test.pred<-predict(model2,dd.test)
 train.pred<-predict(model2,dd.train)
-
 table(train.pred, dd.train$fracture)
 
 ```
@@ -554,16 +561,53 @@ table(test.pred, dd.test$fracture)
 
 acc<-mean(test.pred==dd.test$fracture)
 acc
+```
 
+We see that 168 people were classified as having a fracture when in fact they haven't. Lets take  alook ath the important variables.
+
+
+```{r}
+
+model2$importance %>% round()
+varImpPlot(model2)
+
+```
+
+Lets play around with parameters.
+
+```{r}
+
+system.time(model3<-randomForest(fracture ~ WTMEC2YR+age.first.spine+BMI+age,   data = dd.train, importance = TRUE, ntree =600, mtry = 3))
+model3
 ```
 
 
 
 
+```{r}
 
 
+plot(getTree(model3))
+
+test.pred<-predict(model3,dd.test)
+train.pred<-predict(model3,dd.train)
+
+table(train.pred, dd.train$fracture)
+table(test.pred, dd.test$fracture)
+acc<-mean(test.pred==dd.test$fracture)
+acc
+
+model3$importance %>% round()
+
+partialPlot(model2, dd.train, gender)
+varImpPlot(model3)
+
+r<-rfcv(select(dd.train, -c("fracture")),cv.fold= 3, dd.train$fracture, recursive = TRUE)
+
+r$error.cv
 
 
+```
 
 
 

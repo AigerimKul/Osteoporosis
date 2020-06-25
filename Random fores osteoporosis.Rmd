@@ -587,15 +587,105 @@ model3
 
 Lets see if we can input other variables from the impute data set to get better predictions.
 
-I don't really feel comfortable imputing the bmd data set so lets see what happens if we only keep observation who have this value.
+I don't really feel comfortable imputing all of the bmd variables so lets see what happens if we only keep observation who have values for BMD.
+
+First we transfer all BMD related variables to the dd.full data set and look at the missing values.
+
+```{r}
+
+dd.full$id<-data$id
+dd.full$femur.tot<-dd.imputed$femur.tot
+dd.full$femur.neck<-dd.imputed$femur.neck
+dd.full$trochanter<-dd.imputed$trochanter
+dd.full$intertrochanter<-dd.imputed$intertrochanter
+dd.full$wards<-dd.imputed$wards
+dd.full$spine.BMD<-dd.imputed$spine.BMD
+dd.full$DXXL1BMD<-dd.imputed$DXXL1BMD
+dd.full$DXXL2BMD<-dd.imputed$DXXL2BMD
+dd.full$DXXL3BMD<-dd.imputed$DXXL3BMD
+dd.full$DXXL4BMD<-dd.imputed$DXXL4BMD
+dd.full$alc<-dd.imputed$`12alc`
+
+aggr(dd.full)
+
+```
+
+Next we will remove all observations that don't have BMD measurements on hips and look at the variables with missing values again.
+
+```{r}
+
+dd.bmd<-filter(dd.full, femur.tot != "NA")
+summary(dd.bmd)
+ddm.5<-dd.bmd[which(colSums(is.na(dd.bmd)) > 5935*0.05)]
+aggr(ddm.5,  oma = c(8,1,0,0))
+
+```
+
+All of the above variable pertain to the BMD measurements on spine, the cause for missingness is probably that the fracture has not happened in the spine. Since in this data set we have only observations with other BMD measurements present I feel better about imputing one BMD value for the spine based on BMD values mesured on hip and wrist. 
 
 
 ```{r}
 
-dd.bmd<-
+system.time(dd.bmd.forest<-missForest(dd.bmd)) 
+
+dd.forest2<-dd.bmd.forest
+dd.forest.bmd<-dd.forest2$ximp
+dd.forest.bmd$milk30.day<-dd.forest.bmd$`30day.milk`
+dd.forest.bmd$`30day.milk`<-NULL
+
+dd.forest.bmd$id<-NULL
+dd.forest.bmd$fracture<-as.factor(dd.forest.bmd$fracture)
 
 
 ```
+
+Now lets start modelling based on this new dataset.
+
+```{r}
+
+set.seed(100)
+train.bmd <- sample(nrow(dd.forest.bmd), 0.7*nrow(dd.forest.bmd), replace = FALSE)
+
+dd.train.bmd<-dd.forest.bmd[train.bmd,]
+dd.test.bmd<-dd.forest.bmd[-train.bmd,]
+
+system.time(model4<-randomForest(fracture ~ ., data = dd.train.bmd, importance = TRUE, ntree =500, mtry = 5))
+
+model4
+
+```
+
+
+```{r}
+
+varImpPlot(model4)
+
+```
+
+This model seems to be predicting with pretty good accuracy. lets next test in on the test data set.
+
+
+```{r}
+
+test.pred.bmd<-predict(model4,dd.test.bmd)
+train.pred.bmd<-predict(model4,dd.bmd)
+table(train.pred.bmd, dd.train.bmd$fracture)
+
+```
+
+
+
+
+```{r}
+
+
+```
+
+
+
+
+
+
 
 
 ```{r}

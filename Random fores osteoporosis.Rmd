@@ -668,7 +668,7 @@ This model seems to be predicting with pretty good accuracy. lets next test in o
 ```{r}
 
 test.pred.bmd<-predict(model4,dd.test.bmd)
-train.pred.bmd<-predict(model4,dd.bmd)
+train.pred.bmd<-predict(model4,dd.train.bmd)
 table(train.pred.bmd, dd.train.bmd$fracture)
 
 ```
@@ -678,99 +678,15 @@ table(train.pred.bmd, dd.train.bmd$fracture)
 
 ```{r}
 
+table(test.pred.bmd, dd.test.bmd$fracture)
 
 ```
 
 
+Yey, since the goal was prediction I think it has been achived. The variables that seem to be most associated with fracture are the bone density varibales (BMD) and the age but this could be very misleading because to identify causal variables and not just good predictors we would have to identify mediator and confounders and exclude/include them in the model respectively.
 
 
 
 
 
-
-```{r}
-
-
-plot(getTree(model3))
-
-test.pred<-predict(model3,dd.test)
-train.pred<-predict(model3,dd.train)
-
-table(train.pred, dd.train$fracture)
-table(test.pred, dd.test$fracture)
-acc<-mean(test.pred==dd.test$fracture)
-acc
-
-model3$importance %>% round()
-
-partialPlot(model2, dd.train, gender)
-varImpPlot(model3)
-
-r<-rfcv(select(dd.train, -c("fracture")),cv.fold= 3, dd.train$fracture, recursive = TRUE)
-
-r$error.cv
-
-
-```
-
-
-
-
-
-
-Measurement of L1 - L4 are measurements of BMD associate with L1- L4 vertibrae.
-spine BMD? is it total or avetage BMD? how they measure.
-
-
-```{r include = FALSE}
-
-#dd.core$av.alc[dd.core$`12alc`==2]<-0
-#dd.core$`5drinks.days`[dd.core$`12alc`==2]<-0
-
-#ddm.100<-dd.core[which(colSums(dd.core=="NaN" | dd.core=="NA") >100)]
-#aggr(ddm.100, oma = c(8,2,0,0))
-#To do next:
-
-#1.BMI and weight self past 10 years, look for correlation and maybe we can impute
-
-#2. Who did not want to answer questions about alcohol consumption?
-
-#3. Put a model on all the bone stuff and then impute. Why did these people not get tested?
-
-#4. for the variables: femur.tot, femur.neck,trochanter, intertrochanter and wards we see the pattern of missingness which is calles Little and Ruben, multivariate two pattern. In this case since the missing values are on the same individuals it seems reasonable to say that there is some criteria which needs to satisfied to get bone density testing on these particular bones. I will check the pattern of missingness angainst some of the variables as (age, whether bone was broken) using logistic regression to see whether this is true
-
-#5. One thing to keep in mind is the order in which variables were aquired. For example there could be strong relationship between fracture and test for BMD but if the test was conducted after the fracture happened then we can not use it to predict fracture. But if test is done before the fracture appears, based on some criteria like age then we can use that info to predict the chance of fracture in that individual based on the test.
-
-
-
-
-
-```
-
-# Num.broken variables for more refined analysis.
-
-By looking at the first three variables (num.broken.hip, num.broken.spine, num.broken.wrist) I notice that these variables have NAN when fracture in fact hasn't happened. I will assign value of 0 to (num.broken.hip, num.broken.spine, num.broken.wrist) when (broken.hip, broken.spine,broken.wrist) is 2, meaning no fracture happened
-
-I notice that these variables have NAN when fracture in fact hasn't happened. 
-This kind of missing mechanis is called Missing at Random (MAR), since the missingness relies on observed values of another variable.
-
-
-```{r}
-
-levels(dd$num.broken.hip) #Adding level to a factor
-dd$num.broken.hip<-factor(dd$num.broken.hip, levels= c(levels(dd$num.broken.hip),"0"))
-dd$num.broken.hip[dd$broken.hip==2]<- 0
-
-
-dd$num.broken.wrist<-factor(dd$num.broken.wrist,levels= c(levels(dd$num.broken.wrist),"0"))
-dd$num.broken.wrist[dd$broken.wrist==2]<-0
-
-dd$num.broken.spine<-factor(dd$num.broken.spine,levels= c(levels(dd$num.broken.spine),"0"))
-dd$num.broken.spine[dd$broken.spine==2]<-0
-
-```
-
-
-These variables could help us see whether age has anything to do with probability of fracture as it tells us at what age fracture occured.
-One solution could be creating a variable "Relevant age" which will have current age for people who did't have the fracture and age of fracture which had occured.
 

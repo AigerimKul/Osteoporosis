@@ -561,9 +561,10 @@ table(test.pred, dd.test$fracture)
 
 acc<-mean(test.pred==dd.test$fracture)
 acc
+
 ```
 
-We see that 168 people were classified as having a fracture when in fact they haven't. Lets take  alook ath the important variables.
+We see that 168 people were classified as having a fracture when in fact they haven't. Lets take a look at the important variables. 
 
 
 ```{r}
@@ -577,11 +578,24 @@ Lets play around with parameters.
 
 ```{r}
 
-system.time(model3<-randomForest(fracture ~ WTMEC2YR+age.first.spine+BMI+age,   data = dd.train, importance = TRUE, ntree =600, mtry = 3))
+system.time(model3<-randomForest(fracture ~ WTMEC2YR+BMI+age.first.hip+age.first.spine+age.first.wrist+race+weight.self,   data = dd.train, importance = TRUE, ntree =500, mtry = 3))
+
 model3
+
 ```
 
 
+Lets see if we can input other variables from the impute data set to get better predictions.
+
+I don't really feel comfortable imputing the bmd data set so lets see what happens if we only keep observation who have this value.
+
+
+```{r}
+
+dd.bmd<-
+
+
+```
 
 
 ```{r}
